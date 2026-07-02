@@ -1,0 +1,666 @@
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #12161d;
+    --panel: #1a2029;
+    --panel-2: #212836;
+    --border: #2a3341;
+    --text: #e6e9ef;
+    --text-dim: #8b95a5;
+    --text-faint: #5a6474;
+    --accent: #4fd1c5;
+
+    --s-todo: #6b7280;
+    --s-progress: #f0b429;
+    --s-review: #4a90d9;
+    --s-blocked: #e5484d;
+    --s-done: #2dd6ac;
+
+    --t-dev: #4a90d9;
+    --t-devops: #8b7fd1;
+    --t-test: #38bfa7;
+
+    --p-high: #e5484d;
+    --p-medium: #f0b429;
+    --p-low: #5a6474;
+  }
+
+  * { box-sizing: border-box; }
+
+  #ops-board-root {
+    font-family: 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 20px;
+    background-image:
+      radial-gradient(circle at 1px 1px, rgba(255,255,255,0.035) 1px, transparent 0);
+    background-size: 22px 22px;
+  }
+
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  /* ---------- Header ---------- */
+  .ob-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 18px;
+  }
+  .ob-title {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .ob-title .dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 4px rgba(79,209,197,0.15);
+  }
+  .ob-sub {
+    color: var(--text-dim);
+    font-size: 12.5px;
+    margin-top: 4px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* ---------- Status strip (signature element) ---------- */
+  .strip {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 22px;
+  }
+  .strip-cell {
+    background: var(--panel);
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .strip-top {
+    display: flex; align-items: center; gap: 7px;
+  }
+  .strip-led {
+    width: 7px; height: 7px; border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .strip-led.pulse { animation: pulse-led 1.6s ease-in-out infinite; }
+  @keyframes pulse-led {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(229,72,77,0.55); }
+    50% { box-shadow: 0 0 0 5px rgba(229,72,77,0); }
+  }
+  .strip-count {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 20px;
+    font-weight: 700;
+  }
+  .strip-label {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-dim);
+  }
+
+  /* ---------- Toolbar ---------- */
+  .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .pills { display: flex; gap: 6px; flex-wrap: wrap; }
+  .pill {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11.5px;
+    padding: 6px 11px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: all .15s ease;
+    user-select: none;
+  }
+  .pill:hover { border-color: var(--accent); color: var(--text); }
+  .pill.active {
+    background: rgba(79,209,197,0.12);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .btn-add {
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    background: var(--accent);
+    color: #0c1512;
+    border: none;
+    padding: 9px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: filter .15s ease;
+  }
+  .btn-add:hover { filter: brightness(1.08); }
+
+  /* ---------- Board ---------- */
+  .board {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(230px, 1fr));
+    gap: 12px;
+    overflow-x: auto;
+    padding-bottom: 10px;
+  }
+  .col {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    min-height: 200px;
+    display: flex;
+    flex-direction: column;
+  }
+  .col-head {
+    padding: 12px 12px 10px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-top: 3px solid var(--col-color, var(--accent));
+    border-radius: 12px 12px 0 0;
+  }
+  .col-head-title {
+    font-size: 12.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text);
+  }
+  .col-head-count {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    background: var(--panel-2);
+    border-radius: 999px;
+    padding: 1px 8px;
+  }
+  .col-body {
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1;
+  }
+  .empty-hint {
+    color: var(--text-faint);
+    font-size: 11.5px;
+    font-family: 'JetBrains Mono', monospace;
+    text-align: center;
+    padding: 18px 6px;
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+  }
+
+  /* ---------- Card ---------- */
+  .card {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    padding: 10px 11px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+  .card-title { font-size: 13px; font-weight: 600; line-height: 1.35; }
+  .card-desc {
+    font-size: 11.5px;
+    color: var(--text-dim);
+    line-height: 1.4;
+    max-height: 3.6em;
+    overflow: hidden;
+  }
+  .card-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+  .team-pill {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 5px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+  }
+  .prio-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .card-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 2px;
+  }
+  .assignee {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: var(--text-dim);
+    display: flex; align-items: center; gap: 5px;
+  }
+  .avatar {
+    width: 18px; height: 18px; border-radius: 50%;
+    background: var(--accent);
+    color: #0c1512;
+    font-size: 9px; font-weight: 800;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .due { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-faint); }
+  .card-actions { display: flex; gap: 4px; align-items: center; }
+  .icon-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    border-radius: 6px;
+    width: 22px; height: 22px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1;
+    transition: all .15s ease;
+  }
+  .icon-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .icon-btn.danger:hover { border-color: var(--s-blocked); color: var(--s-blocked); }
+  .icon-btn:disabled { opacity: 0.25; cursor: not-allowed; }
+  .icon-btn:disabled:hover { border-color: var(--border); color: var(--text-dim); }
+
+  /* ---------- Modal ---------- */
+  .overlay {
+    position: fixed; inset: 0;
+    background: rgba(8,10,14,0.65);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 50;
+    padding: 16px;
+  }
+  .modal {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    width: 100%;
+    max-width: 420px;
+    padding: 22px;
+  }
+  .modal h3 { font-size: 16px; margin: 0 0 16px; font-weight: 700; }
+  .field { margin-bottom: 12px; }
+  .field label {
+    display: block;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-dim);
+    margin-bottom: 5px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .field input, .field select, .field textarea {
+    width: 100%;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 7px;
+    padding: 8px 10px;
+    font-size: 13px;
+    font-family: 'Inter', sans-serif;
+  }
+  .field textarea { resize: vertical; min-height: 55px; }
+  .field-row { display: flex; gap: 10px; }
+  .field-row .field { flex: 1; }
+  .modal-actions {
+    display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px;
+  }
+  .btn-secondary {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+  }
+  .btn-secondary:hover { color: var(--text); border-color: var(--text-dim); }
+
+  .loading-state {
+    color: var(--text-dim);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    text-align: center;
+    padding: 40px;
+  }
+
+  @media (max-width: 900px) {
+    .board { grid-template-columns: repeat(5, 260px); }
+    .strip { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+
+<div id="ops-board-root">
+  <div class="loading-state" id="loading-msg">Chargement du board partagé…</div>
+</div>
+
+<script>
+(function() {
+  const STATUSES = [
+    { key: 'todo', label: 'À faire', color: 'var(--s-todo)' },
+    { key: 'inprogress', label: 'En cours', color: 'var(--s-progress)' },
+    { key: 'review', label: 'En revue', color: 'var(--s-review)' },
+    { key: 'blocked', label: 'Bloqué', color: 'var(--s-blocked)' },
+    { key: 'done', label: 'Terminé', color: 'var(--s-done)' }
+  ];
+  const TEAMS = {
+    dev: { label: 'DEV', color: 'var(--t-dev)' },
+    devops: { label: 'DEVOPS', color: 'var(--t-devops)' },
+    test: { label: 'TEST', color: 'var(--t-test)' }
+  };
+  const PRIORITIES = {
+    high: { label: 'Haute', color: 'var(--p-high)' },
+    medium: { label: 'Moyenne', color: 'var(--p-medium)' },
+    low: { label: 'Basse', color: 'var(--p-low)' }
+  };
+  const STORAGE_KEY = 'ops-board-tasks';
+
+  let tasks = [];
+  let activeTeamFilter = 'all';
+  let modalState = null; // null | {mode:'add'} | {mode:'edit', task}
+  let saveError = false;
+
+  const root = document.getElementById('ops-board-root');
+
+  function uid() {
+    return 't-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7);
+  }
+
+  function initials(name) {
+    if (!name) return '?';
+    const parts = name.trim().split(/\s+/);
+    return (parts[0][0] + (parts[1] ? parts[1][0] : '')).toUpperCase();
+  }
+
+  async function loadTasks() {
+    try {
+      const res = await window.storage.get(STORAGE_KEY, true);
+      tasks = res && res.value ? JSON.parse(res.value) : [];
+    } catch (e) {
+      tasks = [];
+    }
+    render();
+  }
+
+  async function persist() {
+    try {
+      const result = await window.storage.set(STORAGE_KEY, JSON.stringify(tasks), true);
+      saveError = !result;
+    } catch (e) {
+      saveError = true;
+    }
+    render();
+  }
+
+  function addTask(data) {
+    tasks.push({
+      id: uid(),
+      title: data.title,
+      desc: data.desc || '',
+      team: data.team,
+      priority: data.priority,
+      assignee: data.assignee || '',
+      due: data.due || '',
+      status: 'todo',
+      createdAt: Date.now()
+    });
+    persist();
+  }
+
+  function updateTask(id, patch) {
+    tasks = tasks.map(t => t.id === id ? { ...t, ...patch } : t);
+    persist();
+  }
+
+  function deleteTask(id) {
+    tasks = tasks.filter(t => t.id !== id);
+    persist();
+  }
+
+  function moveTask(id, dir) {
+    const t = tasks.find(x => x.id === id);
+    if (!t) return;
+    const idx = STATUSES.findIndex(s => s.key === t.status);
+    const newIdx = idx + dir;
+    if (newIdx < 0 || newIdx >= STATUSES.length) return;
+    updateTask(id, { status: STATUSES[newIdx].key });
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str || '';
+    return div.innerHTML;
+  }
+
+  function renderStrip() {
+    const blockedCount = tasks.filter(t => t.status === 'blocked').length;
+    return `<div class="strip">
+      ${STATUSES.map(s => {
+        const count = tasks.filter(t => t.status === s.key).length;
+        const pulse = s.key === 'blocked' && count > 0;
+        return `<div class="strip-cell">
+          <div class="strip-top">
+            <span class="strip-led ${pulse ? 'pulse' : ''}" style="background:${s.color}"></span>
+            <span class="strip-count">${count}</span>
+          </div>
+          <span class="strip-label">${s.label}</span>
+        </div>`;
+      }).join('')}
+    </div>`;
+  }
+
+  function renderToolbar() {
+    return `<div class="toolbar">
+      <div class="pills">
+        <div class="pill ${activeTeamFilter === 'all' ? 'active' : ''}" data-filter="all">TOUT</div>
+        ${Object.entries(TEAMS).map(([key, t]) =>
+          `<div class="pill ${activeTeamFilter === key ? 'active' : ''}" data-filter="${key}">${t.label}</div>`
+        ).join('')}
+      </div>
+      <button class="btn-add" id="btn-open-add">+ Nouvelle tâche</button>
+    </div>`;
+  }
+
+  function renderCard(t) {
+    const team = TEAMS[t.team];
+    const prio = PRIORITIES[t.priority];
+    const idx = STATUSES.findIndex(s => s.key === t.status);
+    return `<div class="card" data-id="${t.id}">
+      <div class="card-top">
+        <div class="card-title">${escapeHtml(t.title)}</div>
+        <div class="card-actions">
+          <button class="icon-btn edit-btn" title="Modifier">✎</button>
+          <button class="icon-btn danger del-btn" title="Supprimer">✕</button>
+        </div>
+      </div>
+      ${t.desc ? `<div class="card-desc">${escapeHtml(t.desc)}</div>` : ''}
+      <div class="card-meta">
+        <span class="team-pill" style="background:${team.color}22; color:${team.color}">${team.label}</span>
+        <span style="display:flex;align-items:center;gap:4px;font-size:10.5px;color:var(--text-dim)">
+          <span class="prio-dot" style="background:${prio.color}"></span>${prio.label}
+        </span>
+      </div>
+      <div class="card-foot">
+        <span class="assignee">
+          ${t.assignee ? `<span class="avatar">${initials(t.assignee)}</span>${escapeHtml(t.assignee)}` : '<span class="mono">—</span>'}
+        </span>
+        <span class="due">${t.due ? t.due : ''}</span>
+      </div>
+      <div class="card-actions" style="justify-content:flex-end;border-top:1px solid var(--border);padding-top:7px;margin-top:2px;">
+        <button class="icon-btn move-left" ${idx === 0 ? 'disabled' : ''} title="Reculer">←</button>
+        <button class="icon-btn move-right" ${idx === STATUSES.length - 1 ? 'disabled' : ''} title="Avancer">→</button>
+      </div>
+    </div>`;
+  }
+
+  function renderBoard() {
+    const filtered = activeTeamFilter === 'all' ? tasks : tasks.filter(t => t.team === activeTeamFilter);
+    return `<div class="board">
+      ${STATUSES.map(s => {
+        const colTasks = filtered.filter(t => t.status === s.key);
+        return `<div class="col">
+          <div class="col-head" style="--col-color:${s.color}">
+            <span class="col-head-title">${s.label}</span>
+            <span class="col-head-count">${colTasks.length}</span>
+          </div>
+          <div class="col-body">
+            ${colTasks.length === 0 ? '<div class="empty-hint">Vide</div>' : colTasks.map(renderCard).join('')}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  }
+
+  function renderModal() {
+    if (!modalState) return '';
+    const isEdit = modalState.mode === 'edit';
+    const t = isEdit ? modalState.task : { title: '', desc: '', team: 'dev', priority: 'medium', assignee: '', due: '' };
+    return `<div class="overlay" id="modal-overlay">
+      <div class="modal">
+        <h3>${isEdit ? 'Modifier la tâche' : 'Nouvelle tâche'}</h3>
+        <div class="field">
+          <label>Titre</label>
+          <input type="text" id="f-title" value="${escapeHtml(t.title)}" placeholder="Ex: Renouveler le certificat kubelet" />
+        </div>
+        <div class="field">
+          <label>Description</label>
+          <textarea id="f-desc" placeholder="Détails, contexte...">${escapeHtml(t.desc)}</textarea>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Équipe</label>
+            <select id="f-team">
+              ${Object.entries(TEAMS).map(([key, v]) => `<option value="${key}" ${t.team === key ? 'selected' : ''}>${v.label}</option>`).join('')}
+            </select>
+          </div>
+          <div class="field">
+            <label>Priorité</label>
+            <select id="f-priority">
+              ${Object.entries(PRIORITIES).map(([key, v]) => `<option value="${key}" ${t.priority === key ? 'selected' : ''}>${v.label}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Assigné à</label>
+            <input type="text" id="f-assignee" value="${escapeHtml(t.assignee)}" placeholder="Nom" />
+          </div>
+          <div class="field">
+            <label>Échéance</label>
+            <input type="date" id="f-due" value="${t.due || ''}" />
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-secondary" id="btn-cancel">Annuler</button>
+          <button class="btn-add" id="btn-save">${isEdit ? 'Enregistrer' : 'Créer'}</button>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  function render() {
+    root.innerHTML = `
+      <div class="ob-header">
+        <div>
+          <div class="ob-title"><span class="dot"></span>Ops Board — Dev / DevOps / Test</div>
+          <div class="ob-sub">${saveError ? '⚠ erreur de synchronisation, dernière modif locale seulement' : 'board partagé · synchronisé en temps réel'}</div>
+        </div>
+      </div>
+      ${renderStrip()}
+      ${renderToolbar()}
+      ${renderBoard()}
+      ${renderModal()}
+    `;
+    attachEvents();
+  }
+
+  function attachEvents() {
+    root.querySelectorAll('[data-filter]').forEach(el => {
+      el.addEventListener('click', () => {
+        activeTeamFilter = el.getAttribute('data-filter');
+        render();
+      });
+    });
+
+    const openAdd = document.getElementById('btn-open-add');
+    if (openAdd) openAdd.addEventListener('click', () => { modalState = { mode: 'add' }; render(); });
+
+    root.querySelectorAll('.edit-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const id = e.target.closest('.card').getAttribute('data-id');
+        const task = tasks.find(t => t.id === id);
+        modalState = { mode: 'edit', task };
+        render();
+      });
+    });
+
+    root.querySelectorAll('.del-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const id = e.target.closest('.card').getAttribute('data-id');
+        deleteTask(id);
+      });
+    });
+
+    root.querySelectorAll('.move-left').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const id = e.target.closest('.card').getAttribute('data-id');
+        moveTask(id, -1);
+      });
+    });
+    root.querySelectorAll('.move-right').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const id = e.target.closest('.card').getAttribute('data-id');
+        moveTask(id, 1);
+      });
+    });
+
+    const cancelBtn = document.getElementById('btn-cancel');
+    if (cancelBtn) cancelBtn.addEventListener('click', () => { modalState = null; render(); });
+
+    const overlay = document.getElementById('modal-overlay');
+    if (overlay) overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) { modalState = null; render(); }
+    });
+
+    const saveBtn = document.getElementById('btn-save');
+    if (saveBtn) saveBtn.addEventListener('click', () => {
+      const title = document.getElementById('f-title').value.trim();
+      if (!title) { document.getElementById('f-title').focus(); return; }
+      const data = {
+        title,
+        desc: document.getElementById('f-desc').value.trim(),
+        team: document.getElementById('f-team').value,
+        priority: document.getElementById('f-priority').value,
+        assignee: document.getElementById('f-assignee').value.trim(),
+        due: document.getElementById('f-due').value
+      };
+      if (modalState.mode === 'edit') {
+        updateTask(modalState.task.id, data);
+      } else {
+        addTask(data);
+      }
+      modalState = null;
+      render();
+    });
+  }
+
+  loadTasks();
+})();
+</script>
